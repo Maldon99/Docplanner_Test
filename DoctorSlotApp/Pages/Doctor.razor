@@ -1,0 +1,146 @@
+﻿@page "/doctor"
+@using DoctorSlotApp.Services
+@using DoctorSlotApp.Models
+@using System.Globalization
+@inject DoctorSlotService DoctorSlotService
+
+<PageTitle>Doctor</PageTitle>
+
+
+<h1>Doctor Slot Booking</h1>
+
+<div>
+    <label for="date">Select a Monday (Date Format: yyyymmdd):</label>
+    <input type="text" id="date"  @onchange="FetchSchedule" />
+</div>
+
+
+@if (!string.IsNullOrEmpty(successBookMessage))
+{
+    <div class="alert alert-success">@successBookMessage</div>
+    successBookMessage = null;
+} 
+ 
+
+@if (!string.IsNullOrEmpty(errorAvailabilityMessage))
+{
+
+    <div class="alert alert-success">@errorAvailabilityMessage</div>
+    slotMV = null;
+    errorAvailabilityMessage = null;
+}
+
+
+@if (slotMV != null && showSlots)
+{
+    <div class="slotMV">
+        @foreach (var slots in slotMV.FacilityDaySchedules)
+        {
+            if (slots.DayName != null)
+            {
+                <div class="day">
+                    <h2>@slots.DayName - @slots.Day </h2>
+                    @foreach (var slot in slots.Slots)
+                    {
+                        <button @onclick="() => SelectSlot(slots.Day, slot, slots.SlotDurationMinutes, slots.FacilityId)">@slot</button>
+                    }
+                </div>
+            }
+        }
+    </div>
+}
+
+@if (selectedSlotStartDate != null)
+{
+
+    <EditForm Model="formData" OnValidSubmit="HandleSubmit">
+        <h2>Book Slot at @selectedSlotStartDate</h2>
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <InputText id="name" @bind-Value="formData.Patient.Name" placeholder="Name" />
+        <InputText id="secondName" @bind-Value="formData.Patient.SecondName" placeholder="Second Name" />
+        <InputText id="email" @bind-Value="formData.Patient.Email" placeholder="Email" />
+        <InputText id="phone" @bind-Value="formData.Patient.Phone" placeholder="Phone" />
+        <InputTextArea id="comments" @bind-Value="formData.Comments" placeholder="Comments" />
+
+        <button type="submit">Book Slot</button>
+    </EditForm>
+}
+
+
+@code {
+    private string selectedDate;
+    //private Schedule schedule;
+    private SlotMV slotMV ;
+    private string selectedSlotStartDate;
+    private SlotBookingRequest formData = new SlotBookingRequest { Patient = new PatientInfo() };
+    private bool showSlots = true;
+    private string successBookMessage;
+    private string errorAvailabilityMessage;
+
+    private async Task FetchSchedule(ChangeEventArgs e)
+    {
+        selectedDate = e.Value.ToString();
+        errorAvailabilityMessage = null;
+        try
+        {
+            slotMV = await DoctorSlotService.GetWeeklyAvailability(selectedDate);
+        }
+        catch(Exception ex)
+        {
+            errorAvailabilityMessage = $"Failed to fetch schedule: {ex.Message}";
+        }
+
+    }
+
+    private void SelectSlot(string day, string slot, int SlotDurationMinutes, string facilityId)
+    {
+        selectedSlotStartDate = $"{day} {slot}";
+
+        //
+        string dateString = day;
+        string timeString = slot;
+
+        DateTime datePart = DateTime.ParseExact(dateString, "yyyyMMdd", CultureInfo.InvariantCulture);
+        TimeSpan timePart = TimeSpan.ParseExact(timeString, "hh\\:mm", CultureInfo.InvariantCulture);
+        DateTime finalDateTime = datePart.Date + timePart;
+        //
+        var selectedDateTime = finalDateTime;
+        selectedSlotStartDate = selectedDateTime.ToString("yyyy-MM-dd HH:mm:ss");
+
+        var selectedEndDate = finalDateTime.AddMinutes(SlotDurationMinutes);
+        var selectedEndDateString = selectedEndDate.ToString("yyyy-MM-dd HH:mm:ss");
+
+        formData.Start = selectedSlotStartDate;
+        formData.End = selectedEndDateString;
+        formData.FacilityId = facilityId;
+
+        showSlots = false;
+    }
+
+    private async Task HandleSubmit()
+    {
+        var success = await DoctorSlotService.TakeSlot(formData);
+        if (success)
+        {
+            // Handle success
+            formData = new SlotBookingRequest { Patient = new PatientInfo() };
+            successBookMessage = "Slot booked successfully!  at " + selectedSlotStartDate;
+            selectedSlotStartDate = null;
+            showSlots = false;
+        }
+        else
+        {
+            // Handle failure
+            successBookMessage = "Failed to book the slot. Please try again.";
+
+        }
+    }
+
+
+    //
+    
+    //
+
+}

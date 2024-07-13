@@ -1,0 +1,6 @@
+@DoctorSlotAPI_HostAddress = http://localhost:5296
+
+GET {{DoctorSlotAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
